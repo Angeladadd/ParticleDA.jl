@@ -228,7 +228,7 @@ function run_particle_filter(
             filter_data.unpacked_statistics, filter_data.statistics
         )
         @timeit_debug timer "Filter" filter_data = init_filter(
-            filter_params, model, nprt_per_rank, filter_type, summary_stat_type
+            filter_params, model, nprt_per_rank, n_tasks, filter_type, summary_stat_type
         )
         @timeit_debug timer "Update statistics" update_statistics!(
             filter_data.statistics, states, filter_params.master_rank
@@ -319,7 +319,8 @@ function run_particle_filter(
                 filter_data.copy_buffer,
                 filter_data.resampling_indices,
                 my_rank,
-                nprt_per_rank
+                nprt_per_rank,
+                timer
             )
             
             @timeit_debug timer "B: post-copy" MPI.Barrier(MPI.COMM_WORLD)

@@ -172,9 +172,9 @@ function sample_proposal_and_compute_log_weights!(
             )
         end
     end
-    for thread_timer in thread_timers
-        timer.enabled && merge!(timer, thread_timer, tree_point=["Filtering", "Proposals & weights"])
-    end
+    # for thread_timer in thread_timers
+    #     timer.enabled && merge!(timer, thread_timer, tree_point=["Filtering", "Proposals & weights"])
+    # end
 end
 
 function get_log_density_observation_given_previous_state(

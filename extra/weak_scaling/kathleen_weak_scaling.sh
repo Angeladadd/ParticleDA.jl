@@ -12,16 +12,18 @@
 #$ -N ParticleDAScaling
 
 # Select the MPI parallel environment and no. cores.
-#$ -pe mpi 160
+#$ -pe mpi 80
 
 # Set the working directory to somewhere in your scratch space. 
 # This directory must exist.
-#$ -wd /home/ccaemgr/Scratch/ParticleDA.jl/extra/weak_scaling
+#$ -wd /home/ucabc46/ParticleDA.jl/extra/weak_scaling
 
-module load julia/1.8.5
+# module load julia/1.8.5
 
 # Automatically set threads using ppn
-export OMP_NUM_THREADS=$(ppn)
-export JULIA_NUM_THREADS=$OMP_NUM_THREADS
+# export OMP_NUM_THREADS=$(ppn)
+# export JULIA_NUM_THREADS=$OMP_NUM_THREADS
 
-/home/ccaemgr/.julia/bin/mpiexecjl -n $NHOSTS julia --project=. /home/ccaemgr/Scratch/ParticleDA.jl/extra/weak_scaling/run_particleda.jl
+NHOSTS=1
+
+/home/ucabc46/.julia/bin/mpiexecjl -n $NHOSTS julia --project=. /home/ucabc46/ParticleDA.jl/extra/weak_scaling/run_particleda.jl
