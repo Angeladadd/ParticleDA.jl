@@ -18,11 +18,12 @@
 # This directory must exist.
 #$ -wd /home/ucabc46/ParticleDA.jl/extra/weak_scaling
 
-# module load julia/1.8.5
+module load julia/1.8.5
+julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.add("MPI"); Pkg.add("TimerOutputs"); Pkg.add("LinearAlgebra"); Pkg.add("HDF5"); Pkg.add("GaussianRandomFields")'
 
 # Automatically set threads using ppn
-# export OMP_NUM_THREADS=$(ppn)
-# export JULIA_NUM_THREADS=$OMP_NUM_THREADS
-NHOSTS=1
+export OMP_NUM_THREADS=$(ppn)
+export JULIA_NUM_THREADS=$OMP_NUM_THREADS
 
+# /home/ucabc46/.julia/bin/mpiexecjl -n 1 julia --project=. /home/ucabc46/ParticleDA.jl/extra/weak_scaling/run_particleda.jl
 /home/ucabc46/.julia/bin/mpiexecjl -n $NHOSTS julia --project=. /home/ucabc46/ParticleDA.jl/extra/weak_scaling/run_particleda.jl
