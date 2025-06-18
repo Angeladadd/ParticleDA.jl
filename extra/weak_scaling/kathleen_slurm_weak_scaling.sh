@@ -2,7 +2,8 @@
 #SBATCH --job-name=ParticleDAScaling
 #SBATCH --time=00:10:00
 #SBATCH --mem-per-cpu=4G
-#SBATCH --ntasks=4
+#SBATCH --nodes=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=40
 #SBATCH --chdir=/home/ucabc46/ParticleDA.jl/extra/weak_scaling
 #SBATCH --output=slurm_log/%x-%j.out
@@ -14,6 +15,6 @@
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export JULIA_NUM_THREADS=$OMP_NUM_THREADS
 
-srun /home/ucabc46/.julia/bin/mpiexecjl -n $SLURM_NTASKS \
+/home/ucabc46/.julia/bin/mpiexecjl \
      julia --project=. \
      /home/ucabc46/ParticleDA.jl/extra/weak_scaling/run_particleda.jl
