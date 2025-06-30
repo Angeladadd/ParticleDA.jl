@@ -1,18 +1,28 @@
-using Test, ParticleDA, MPI, Random
+using Test, ParticleDA, MPI, Random, TimerOutputs, HDF5, Serialization
+TimerOutputs.enable_debug_timings(ParticleDA)
+
+
+build_expected_buffer(indices, r, npr, nf) =
+    Float64.((1:nf) .+ ((indices[r*npr .+ (1:npr)] .- 1) .* nf)')
 
 MPI.Init()
 my_rank = MPI.Comm_rank(MPI.COMM_WORLD)
 my_size = MPI.Comm_size(MPI.COMM_WORLD)
 
-n_particle_per_rank = 3
+n_particle_per_rank = 1000
 n_particle = n_particle_per_rank * my_size
 verbose = "-v" in ARGS || "--verbose" in ARGS
+output_timer = "-t" in ARGS || "--output-timer" in ARGS
 
-local_states = float(
-    collect(
-        my_rank * n_particle_per_rank + 1 : (my_rank + 1) * n_particle_per_rank
-    )
-)
+# TODO: change each particle to be a vector of states(2D), >= thousands of floats to reach the network bandwidth
+n_float_per_particle = 1000
+# total number of floats per rank
+N = n_float_per_particle * n_particle_per_rank
+# build & reshape in one go, then allocate a similar array
+init_local_states = reshape((my_rank*N .+ (1:N)) .* 1.0,
+                            n_float_per_particle,
+                            n_particle_per_rank)
+local_states = similar(init_local_states)
 
 if verbose
     for i = 1:my_size
@@ -23,42 +33,98 @@ if verbose
     end
 end
 
-buffer = zeros((1, n_particle_per_rank))
+buffer = zeros((n_float_per_particle, n_particle_per_rank))
 
 Random.seed!(1234)
-indices = rand(1:n_particle, n_particle)
 
-if verbose && my_rank == 0
-    println()
-    println("Resampling particles to indices ", indices)
-    println()
-end
-
-ParticleDA.copy_states!(
-    reshape(local_states, (1, n_particle_per_rank)), 
-    buffer, 
-    indices, 
-    my_rank, 
-    n_particle_per_rank
+# TODO: use an uneven distribution of particles across ranks
+# e.g.: 1 particle has all of the weights, a small portion of particles have the most weights, etc.
+trial_sets = Dict(
+    "1 particle most weights" => rand(1:1, n_particle),
+    "10 particles most weights" => rand(1:10, n_particle),
+    "100 particles most weights" => rand(1:min(100, n_particle), n_particle),
 )
 
-if verbose
-    for i = 1:my_size
-        if i == my_rank + 1
-            test = (
-                local_states 
-                == float(
-                    indices[
-                        my_rank * n_particle_per_rank + 1 : (my_rank + 1) * n_particle_per_rank
-                    ]
-                )
-            )
-            println("rank ", my_rank, ": local states: ",  local_states, " -- ", test)
+local_timer_dicts = Dict{String, Dict{String,Any}}()
+
+for (trial_name, indices) in trial_sets
+    if verbose && my_rank == 0
+        println()
+        println("Resampling particles to indices ", indices)
+        println()
+    end
+
+    # Convert Set to Vector for indexing
+    indices = collect(indices)
+    # Ensure indices are within bounds
+    @test all(indices .<= n_particle)
+    @test all(indices .> 0)
+
+    # repeat experiment 10 times to get average time
+    timer = TimerOutputs.TimerOutput("copy_states")
+    for _ in 1:10
+        copyto!(local_states, init_local_states)
+        ParticleDA.copy_states!(
+            local_states,
+            buffer, 
+            indices, 
+            my_rank, 
+            n_particle_per_rank,
+            timer
+        )
+    end
+    local_timer_dicts[trial_name] = TimerOutputs.todict(timer)
+
+    if verbose
+        for i = 1:my_size
+            if i == my_rank + 1
+                # reconstruct expected buffer for this rank
+                expected = build_expected_buffer(indices, my_rank,
+                                    n_particle_per_rank,
+                                    n_float_per_particle)
+
+                # compare
+                match = local_states == expected
+
+                println("rank ", my_rank, ": local_states =")
+                show(stdout, "text/plain", local_states); println()
+                println("rank ", my_rank, ": expected =")
+                show(stdout, "text/plain", expected); println()
+                println("rank ", my_rank, ": match = ", match)
+            end
+            MPI.Barrier(MPI.COMM_WORLD)
         end
-        MPI.Barrier(MPI.COMM_WORLD)
+    end
+    
+    # build the expected buffer
+    expected = build_expected_buffer(indices, my_rank,
+                                    n_particle_per_rank,
+                                    n_float_per_particle)
+
+    @test local_states == expected
+end
+
+if output_timer
+    all_local = MPI.gather(local_timer_dicts, MPI.COMM_WORLD; root=0)
+    if my_rank == 0
+        merged = Dict{String,Dict{Int,Dict{String,Any}}}()
+        for r in 0:my_size-1
+            for (trial, tdict) in all_local[r+1]
+                rankmap = get!(merged, trial, Dict{Int,Dict{String,Any}}())
+                rankmap[r] = tdict
+            end
+        end
+    
+        buf   = IOBuffer()
+        serialize(buf, merged)
+        blob  = take!(buf)  # Vector{UInt8}
+    
+        h5open("all_timers.h5", "w") do f
+            write(f, "all_timers", blob)
+        end
     end
 end
 
-@test local_states == float(
-    indices[my_rank * n_particle_per_rank + 1 : (my_rank + 1) * n_particle_per_rank]
-)
+
+MPI.Barrier(MPI.COMM_WORLD)
+MPI.Finalize()
