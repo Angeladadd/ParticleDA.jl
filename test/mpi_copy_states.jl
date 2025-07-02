@@ -5,6 +5,33 @@ TimerOutputs.enable_debug_timings(ParticleDA)
 build_expected_buffer(indices, r, npr, nf) =
     Float64.((1:nf) .+ ((indices[r*npr .+ (1:npr)] .- 1) .* nf)')
 
+function sample_indices(n::Int; k::Int=10, p::Float64=0.99)
+    @assert 1 ≤ k < n       "k must be between 1 and n-1"
+    @assert 0.0 ≤ p ≤ 1.0   "p must be in [0,1]"
+
+    # 1. Pick k unique “favorite” indices via a random permutation
+    fav = randperm(n)[1:k]
+
+    # 2. Build the complement
+    other = setdiff(1:n, fav)
+
+    # 3. Decide for each of the n draws whether it comes from fav (true) or other (false)
+    mask = rand(n) .< p     # Bool vector of length n
+
+    # 4. Preallocate result
+    result = Vector{Int}(undef, n)
+
+    # 5. How many draws from each group?
+    na = count(mask)
+    nb = n - na
+
+    # 6. Sample with replacement from each group
+    result[mask]   .= rand(fav, na)
+    result[.!mask] .= rand(other, nb)
+
+    return result
+end
+
 MPI.Init()
 my_rank = MPI.Comm_rank(MPI.COMM_WORLD)
 my_size = MPI.Comm_size(MPI.COMM_WORLD)
@@ -37,12 +64,10 @@ buffer = zeros((n_float_per_particle, n_particle_per_rank))
 
 Random.seed!(1234)
 
-# TODO: use an uneven distribution of particles across ranks
-# e.g.: 1 particle has all of the weights, a small portion of particles have the most weights, etc.
 trial_sets = Dict(
-    "1 particle most weights" => rand(1:1, n_particle),
-    "10 particles most weights" => rand(1:10, n_particle),
-    "100 particles most weights" => rand(1:min(100, n_particle), n_particle),
+    "1 particle most weights" => sample_indices(n_particle, k=1, p=0.99),
+    "10 particles most weights" => sample_indices(n_particle, k=10, p=0.99),
+    "100 particles most weights" => sample_indices(n_particle, k=100, p=0.99),
 )
 
 local_timer_dicts = Dict{String, Dict{String,Any}}()
