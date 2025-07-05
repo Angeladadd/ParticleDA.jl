@@ -4,7 +4,6 @@ TimerOutputs.enable_debug_timings(ParticleDA)
 
 build_expected_buffer(indices, r, npr, nf) =
     Float64.((1:nf) .+ ((indices[r*npr .+ (1:npr)] .- 1) .* nf)')
-
 function sample_indices(n::Int; k::Int=10, p::Float64=0.99)
     @assert 1 ≤ k < n       "k must be between 1 and n-1"
     @assert 0.0 ≤ p ≤ 1.0   "p must be in [0,1]"
@@ -64,10 +63,14 @@ buffer = zeros((n_float_per_particle, n_particle_per_rank))
 
 Random.seed!(1234)
 
+# TODO: use an uneven distribution of particles across ranks
+# e.g.: 1 particle has all of the weights, a small portion of particles have the most weights, etc.
 trial_sets = Dict(
-    "1 particle most weights" => sample_indices(n_particle, k=1, p=0.99),
-    "10 particles most weights" => sample_indices(n_particle, k=10, p=0.99),
-    "100 particles most weights" => sample_indices(n_particle, k=100, p=0.99),
+    "1:$my_size:$n_particle_per_rank" => sample_indices(n_particle, k=1, p=0.99),
+    "10:$my_size:$n_particle_per_rank" => sample_indices(n_particle, k=10, p=0.99),
+    "100:$my_size:$n_particle_per_rank" => sample_indices(n_particle, k=100, p=0.99),
+    "half:$my_size:$n_particle_per_rank" => sample_indices(n_particle, k=div(n_particle, 2), p=0.99),
+    "all:$my_size:$n_particle_per_rank" => collect(1:n_particle)
 )
 
 local_timer_dicts = Dict{String, Dict{String,Any}}()
@@ -144,7 +147,7 @@ if output_timer
         serialize(buf, merged)
         blob  = take!(buf)  # Vector{UInt8}
     
-        h5open("all_timers.h5", "w") do f
+        h5open("all_timers_rank$my_size.h5", "w") do f
             write(f, "all_timers", blob)
         end
     end
