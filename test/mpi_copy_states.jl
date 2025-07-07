@@ -39,6 +39,13 @@ n_particle_per_rank = 1000
 n_particle = n_particle_per_rank * my_size
 verbose = "-v" in ARGS || "--verbose" in ARGS
 output_timer = "-t" in ARGS || "--output-timer" in ARGS
+if output_timer
+    if length(ARGS) < 2
+        error("Please provide the output filename for timers.")
+    end
+    output_filename = ARGS[2]
+    println("Outputting timers to HDF5 file '$output_filename'")
+end
 
 # TODO: change each particle to be a vector of states(2D), >= thousands of floats to reach the network bandwidth
 n_float_per_particle = 1000
@@ -147,7 +154,7 @@ if output_timer
         serialize(buf, merged)
         blob  = take!(buf)  # Vector{UInt8}
     
-        h5open("all_timers_rank$my_size.h5", "w") do f
+        h5open(output_filename, "w") do f
             write(f, "all_timers", blob)
         end
     end
