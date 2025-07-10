@@ -1,6 +1,8 @@
 using Test, ParticleDA, MPI, Random, TimerOutputs, HDF5, Serialization
 TimerOutputs.enable_debug_timings(ParticleDA)
 
+const rng = Random.TaskLocalRNG()
+Random.seed!(rng, 1234)
 
 build_expected_buffer(indices, r, npr, nf) =
     Float64.((1:nf) .+ ((indices[r*npr .+ (1:npr)] .- 1) .* nf)')
@@ -9,13 +11,13 @@ function sample_indices(n::Int; k::Int=10, p::Float64=0.99)
     @assert 0.0 ≤ p ≤ 1.0   "p must be in [0,1]"
 
     # 1. Pick k unique “favorite” indices via a random permutation
-    fav = randperm(n)[1:k]
+    fav = randperm(rng, n)[1:k]
 
     # 2. Build the complement
     other = setdiff(1:n, fav)
 
     # 3. Decide for each of the n draws whether it comes from fav (true) or other (false)
-    mask = rand(n) .< p     # Bool vector of length n
+    mask = rand(rng, n) .< p     # Bool vector of length n
 
     # 4. Preallocate result
     result = Vector{Int}(undef, n)
@@ -25,8 +27,8 @@ function sample_indices(n::Int; k::Int=10, p::Float64=0.99)
     nb = n - na
 
     # 6. Sample with replacement from each group
-    result[mask]   .= rand(fav, na)
-    result[.!mask] .= rand(other, nb)
+    result[mask]   .= rand(rng, fav, na)
+    result[.!mask] .= rand(rng, other, nb)
 
     return result
 end
@@ -67,8 +69,6 @@ if verbose
 end
 
 buffer = zeros((n_float_per_particle, n_particle_per_rank))
-
-Random.seed!(1234)
 
 # TODO: use an uneven distribution of particles across ranks
 # e.g.: 1 particle has all of the weights, a small portion of particles have the most weights, etc.
