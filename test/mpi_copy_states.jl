@@ -70,19 +70,18 @@ end
 
 buffer = zeros((n_float_per_particle, n_particle_per_rank))
 
-# TODO: use an uneven distribution of particles across ranks
-# e.g.: 1 particle has all of the weights, a small portion of particles have the most weights, etc.
+
 trial_sets = Dict(
     "1:$my_size:$n_particle_per_rank:randperm" => sample_indices(n_particle, k=1, p=0.99),
     "10:$my_size:$n_particle_per_rank:randperm" => sample_indices(n_particle, k=10, p=0.99),
     "100:$my_size:$n_particle_per_rank:randperm" => sample_indices(n_particle, k=100, p=0.99),
     "half:$my_size:$n_particle_per_rank:randperm" => sample_indices(n_particle, k=div(n_particle, 2), p=0.99),
-    "all:$my_size:$n_particle_per_rank:randperm" => collect(1:n_particle),
+    "all:$my_size:$n_particle_per_rank:randperm" => randperm(n_particle),
     "1:$my_size:$n_particle_per_rank:firstperm" => ones(Int, n_particle),
     "10:$my_size:$n_particle_per_rank:firstperm" => rand(rng, 1:10, n_particle),
     "100:$my_size:$n_particle_per_rank:firstperm" => rand(rng, 1:100, n_particle),
     "half:$my_size:$n_particle_per_rank:firstperm" => rand(rng, 1:div(n_particle, 2), n_particle),
-    "all:$my_size:$n_particle_per_rank:firstperm" => collect(1:n_particle),
+    "all:$my_size:$n_particle_per_rank:firstperm" => randperm(n_particle),
 )
 
 local_timer_dicts = Dict{String, Dict{String,Any}}()
